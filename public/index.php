@@ -5,6 +5,10 @@ use Symfony\Component\Debug\Debug;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
 
+//use vendor\phpseclib\phpseclib\phpseclib\Net\SFTP;
+
+//$sftp = new SFTP('www.example.com');
+
 require __DIR__.'/../vendor/autoload.php';
 
 // The check is to ensure we don't use .env in production
