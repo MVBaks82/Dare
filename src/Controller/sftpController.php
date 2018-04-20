@@ -10,7 +10,8 @@
 	class sftpController extends Controller
 	{
 
-		protected $sftp = "";
+		protected 	$connection = false,
+					$ftp 		= true;
 
 	    public function sftpRender()
 	    {
@@ -26,17 +27,40 @@
 	    **/
 	    public function connection( )
 	    {
-	    	$this->sftp = new SFTP( $this->hostCheck( $_POST[ 'host' ] ) );
-	    	if ( !$this->sftp->login( $_POST[ 'username' ], $_POST[ 'password' ] ) ) {
-	    		throw new Exeption( 'FTP Login failed' );
-	    	}
-	    	if ( !$file = $this->findFile( $_POST[ 'filename' ] ) ){
-	    		throw new Exeption( 'File not found' );
-	    	}
-	    	return $this->render( 'sftp.html.twig', [
-	        	"lines" => $this->countRows( $file )
-	        ] );
-
+	    	$host = $this->hostCheck( $_POST[ 'host' ] );
+	    	// ToDo: juiste exeption afhandeling
+	    	if ( $host ){
+	    		if ( isset( $_POST[ 'sftp' ] ) ){
+	    			$this->ftp = false;
+			    	$this->connection = new SFTP( $_POST[ 'host' ] );
+			    	if ( !$this->connection->login( $_POST[ 'username' ], $_POST[ 'password' ] ) ) {
+			    		//throw new Exeption( "FTP Login failed" );
+			    		die( "FTP Login failed" );
+			    	}
+			    	if ( !$file = $this->findFile( $_POST[ 'filename' ] ) ){
+			    		//throw new Exeption( "File not found" );
+			    		die( "File (" . $_POST[ 'filename' ] . ") not found" );
+			    	}
+			    	return $this->render( 'sftp.html.twig', [
+			        	"lines" => $this->countRows( $file )
+			        ] );
+			    } else {
+			    	$this->connection = ftp_connect( $_POST[ 'host' ] );
+			    	if ( !ftp_login( $this->connection, $_POST[ 'username' ], $_POST[ 'password' ] ) ) {
+			    		//throw new Exeption( "FTP Login failed" );
+			    		die( "FTP Login failed" );
+			    	}
+			    	if ( !$file = $this->findFile( $_POST[ 'filename' ] ) ){
+			    		//throw new Exeption( "File not found" );
+			    		die( "File (" . $_POST[ 'filename' ] . ") not found" );
+			    	}
+			    	return $this->render( "connect.html.twig", [
+			        	"lines" 	=> $this->countRows( $file ),
+			        	"filename"	=> $file
+			        ] );
+			    }
+		    }
+		    return false;
 	    }
 
 	    private function countRows( string $file )
@@ -47,25 +71,21 @@
 	    		$lines += substr_count( fread( $fp, 2048 ), "\n" );
 	    	}
 	    	fclose( $fp );
+	    	unlink( $file );
 	    	return $lines;
 	    }
 
-	    private function findFile( string $filename, string $directory = "" )
+	    private function findFile( string $filename, string $directory = "/" )
 	    {
-
-	    	!file_exists( "./var/temp" ) ? mkdir( "./var/temp" ) : true;
-
-	    	if( !empty( $directory ) ){
-	    		$this->chdir( $directory );
-	    	}
-	    	$files = $this->sftp->nlist();
+	    	$this->ftp ? ftp_chdir( $this->connection, $directory ) : $this->chdir( $directory );
+	    	$files = $this->ftp ? ftp_nlist( $this->connection, '/' ) : $this->connection->nlist();
 	    	foreach( $files as $file ){
 	    		if ( is_array( $file ) ){
 	    			return $this->findFile( $filename, $file );
 	    		}
 	    		if ( $file == $filename ){
-	    			$this->sftp->get( $file, "./var/temp/" . $file );
-	    			return "./var/temp/" . $file;
+	    			$this->ftp ? ftp_get( $this->connection, $file, $file, FTP_ASCII ) : $this->connection->get( $file, $file );
+	    			return $file;
 	    		}
 	    	}
 	    	return false;
@@ -81,7 +101,7 @@
 	    	$parts = explode( ".", $host );
 	    	if ( count( $parts ) == 4 ){
 	    		foreach ( $parts as $part ) {
-	    			if ( !is_numeric( $pary ) ){
+	    			if ( !is_numeric( $part ) ){
 	    				$parsedURL = parse_url( $host );
 	    				$domain = isset( $pieces[ 'host' ] ) ? $pieces[ 'host' ] : $pieces[ 'path' ];
 	    				if ( preg_match( '/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})$/i', $domain, $regs ) ) {
